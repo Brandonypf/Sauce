@@ -1,70 +1,39 @@
-<<<<<<< HEAD
-## Foundry
+# Hackathon Arbitrum
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+Proyecto desarrollado para la Hackathon de Arbitrum.
 
-Foundry consists of:
+## Tecnologías
 
-- **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
-- **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
-- **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
-- **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+- Solidity
+- Foundry
+- Hardhat
+- OpenZeppelin
+- Arbitrum Sepolia
+- Alchemy
+- MetaMask
 
-## Documentation
+## Comandos útiles
 
-https://book.getfoundry.sh/
+### Compilar
 
-## Usage
-
-### Build
-
-```shell
-$ forge build
+```bash
+forge build
 ```
 
-### Test
+### Ejecutar pruebas
 
-```shell
-$ forge test
+```bash
+forge test
 ```
 
-### Format
+### Levantar Anvil
 
-```shell
-$ forge fmt
+```bash
+anvil
 ```
 
-### Gas Snapshots
+### Desplegar
 
-```shell
-$ forge snapshot
+```bash
+forge script script/Counter.s.sol:CounterScript --broadcast
 ```
-
-### Anvil
-
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
-=======
-# Hackathon
->>>>>>> fdd2638f760b82dbc0776bdce54ad0ac806a9235
