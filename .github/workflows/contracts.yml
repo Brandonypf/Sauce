@@ -1,10 +1,16 @@
-name: CI
+name: contracts CI
 
 permissions: {}
 
 on:
   push:
+    paths:
+      - "contracts/**"
+      - ".github/workflows/contracts.yml"
   pull_request:
+    paths:
+      - "contracts/**"
+      - ".github/workflows/contracts.yml"
   workflow_dispatch:
 
 jobs:
@@ -13,6 +19,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    defaults:
+      run:
+        working-directory: contracts
     steps:
       - uses: actions/checkout@v6
         with:
