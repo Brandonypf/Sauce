@@ -5,7 +5,7 @@ Idea de esquema del ambiente de trabajo
 ## Estructura del proyecto
 ...
 sauce/
-├── contracts/              ← todo lo que ya tienes en Foundry
+├── contracts/              ← todo lo que ya se tiene en Foundry
 │   ├── src/
 │   ├── lib/                 (submódulos: forge-std, openzeppelin, etc.)
 │   ├── script/
@@ -13,7 +13,7 @@ sauce/
 │   ├── foundry.toml
 │   ├── foundry.lock
 │   └── .gitmodules
-├── frontend/                ← el proyecto Next.js que armamos
+├── frontend/                ← el proyecto Next.js que arme
 │   ├── app/
 │   ├── components/
 │   ├── data/
@@ -25,3 +25,4 @@ sauce/
 │       └── frontend.yml     (nuevo, lint/build del frontend)
 ├── .gitignore                ← uno solo en la raíz, cubre ambos
 └── README.md                 ← overview del proyecto completo
+... 
