@@ -16,13 +16,9 @@ contract CreatorRegistryTest is Test {
     function testRegisterCreator() public {
         vm.prank(creator);
 
-        creatorRegistry.registerCreator(
-            "Brandon",
-            "ipfs://creator-profile"
-        );
+        creatorRegistry.registerCreator("Brandon", "ipfs://creator-profile");
 
-        bool isRegistered =
-            creatorRegistry.isRegisteredCreator(creator);
+        bool isRegistered = creatorRegistry.isRegisteredCreator(creator);
 
         assertTrue(isRegistered);
     }

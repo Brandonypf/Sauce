@@ -8,52 +8,26 @@ import {ContentRegistry} from "../src/ContentRegistry.sol";
 import {RoyaltyManager} from "../src/RoyaltyManager.sol";
 import {LicenseNFT} from "../src/LicenseNFT.sol";
 
-
 contract Deploy is Script {
-
-
     function run()
         external
-        returns(
+        returns (
             CreatorRegistry creatorRegistry,
             ContentRegistry contentRegistry,
             RoyaltyManager royaltyManager,
             LicenseNFT licenseNFT
         )
     {
-
         vm.startBroadcast();
 
+        creatorRegistry = new CreatorRegistry();
 
-        creatorRegistry =
-            new CreatorRegistry();
+        contentRegistry = new ContentRegistry(address(creatorRegistry));
 
+        royaltyManager = new RoyaltyManager(msg.sender);
 
-
-        contentRegistry =
-            new ContentRegistry(
-                address(creatorRegistry)
-            );
-
-
-
-        royaltyManager =
-            new RoyaltyManager(
-                msg.sender
-            );
-
-
-
-        licenseNFT =
-            new LicenseNFT(
-                address(contentRegistry),
-                address(royaltyManager)
-            );
-
+        licenseNFT = new LicenseNFT(address(contentRegistry), address(royaltyManager));
 
         vm.stopBroadcast();
-
-
     }
-
 }
