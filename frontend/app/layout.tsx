@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import "@rainbow-me/rainbowkit/styles.css";
 import "./globals.css";
+import { Providers } from "./providers";
 
 export const metadata: Metadata = {
   title: "SAUCE",
@@ -13,7 +15,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es">
-      <body className="bg-sauce-canvas min-h-screen">{children}</body>
+      <body className="bg-sauce-canvas min-h-screen">
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }
