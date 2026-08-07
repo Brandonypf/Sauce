@@ -1,0 +1,67 @@
+# Pila completa en local. Es el camino corto antes de Kubernetes: la misma
+# separacion de procesos, sin la complejidad del cluster.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: sauce
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/sauce
+      CORS_ORIGIN: http://localhost:3000
+      CHAIN_ID: "31337"
+      RPC_URL: http://host.docker.internal:8545
+      LICENSE_NFT_ADDRESS: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
+      ISSUER_PRIVATE_KEY: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+      GATEWAY_WEBHOOK_SECRET: dev-secret
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Proceso aparte del mismo codigo. Aqui se puede escalar `api` sin pensar; el
+  # relayer no, y tenerlo separado es lo que hace posible esa asimetria.
+  relayer:
+    build:
+      context: ./backend
+    command: ["node", "dist/relayer/index.js"]
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/sauce
+      CHAIN_ID: "31337"
+      RPC_URL: http://host.docker.internal:8545
+      RELAYER_PRIVATE_KEY: "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:4000
+        NEXT_PUBLIC_ARB_RPC: http://127.0.0.1:8545
+        NEXT_PUBLIC_LICENSE_NFT_ADDRESS: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:

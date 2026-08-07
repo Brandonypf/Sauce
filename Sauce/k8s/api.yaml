@@ -1,0 +1,88 @@
+# API: sin estado, se escala sin pensarlo.
+#
+# Toda la correccion bajo concurrencia vive en los indices unicos de Postgres, no
+# en la memoria de estos procesos. Tres replicas o treinta se comportan igual: dos
+# personas pidiendo el mismo handle a la vez chocan en la base y una recibe 409.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sauce-api
+  labels: { app: sauce-api }
+spec:
+  replicas: 3
+  selector:
+    matchLabels: { app: sauce-api }
+  template:
+    metadata:
+      labels: { app: sauce-api }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: api
+          image: sauce/api:latest
+          ports:
+            - containerPort: 4000
+          envFrom:
+            - configMapRef: { name: sauce-config }
+            - secretRef: { name: sauce-secrets }
+
+          # Liveness NO consulta la base a proposito. Si Postgres se cae, no se
+          # gana nada reiniciando en bucle los pods de la API: el proceso esta
+          # bien, la dependencia no.
+          livenessProbe:
+            httpGet: { path: /health, port: 4000 }
+            initialDelaySeconds: 10
+            periodSeconds: 15
+
+          # Readiness SI la consulta: un pod sin base no debe recibir trafico,
+          # pero tampoco morir.
+          readinessProbe:
+            httpGet: { path: /ready, port: 4000 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 512Mi }
+
+      # Margen para que SIGTERM cierre las peticiones en vuelo antes del SIGKILL.
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sauce-api
+spec:
+  selector: { app: sauce-api }
+  ports:
+    - port: 80
+      targetPort: 4000
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: sauce-api
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: sauce-api
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: 70 }
+---
+# Con varias replicas, un `kubectl drain` podria llevarse todas a la vez.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: sauce-api
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels: { app: sauce-api }

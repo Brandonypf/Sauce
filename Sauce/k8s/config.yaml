@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sauce-config
+data:
+  NODE_ENV: "production"
+  PORT: "4000"
+  CORS_ORIGIN: "https://sauce.example"
+  CHAIN_ID: "421614"
+  RPC_URL: "https://sepolia-rollup.arbitrum.io/rpc"
+  LICENSE_NFT_ADDRESS: "0x0000000000000000000000000000000000000000"
+  VOUCHER_TTL_DAYS: "7"
+  CONTENT_URL_TTL_SECONDS: "300"
+---
+# Plantilla. NO aplicar con estos valores ni versionar los reales.
+#
+# Las dos llaves son distintas a proposito: firmar un voucher es gratis y sin
+# estado, enviar una transaccion consume nonce y fondos. Solo el relayer necesita
+# RELAYER_PRIVATE_KEY, y solo la API necesita ISSUER_PRIVATE_KEY — pero como
+# ambos Deployments montan este mismo Secret, hoy las dos llegan a los dos. Al
+# separarlas en dos Secrets, un compromiso de la API no permite gastar fondos.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: sauce-secrets
+type: Opaque
+stringData:
+  DATABASE_URL: "postgres://sauce:CAMBIAR@postgres:5432/sauce"
+  ISSUER_PRIVATE_KEY: "0xCAMBIAR"
+  RELAYER_PRIVATE_KEY: "0xCAMBIAR"
+  GATEWAY_WEBHOOK_SECRET: "CAMBIAR"
