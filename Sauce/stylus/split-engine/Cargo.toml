@@ -1,0 +1,27 @@
+[package]
+name = "sauce-split-engine"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Motor de reparto de ingresos para SAUCE, en Arbitrum Stylus"
+
+[dependencies]
+alloy-primitives = "0.8"
+alloy-sol-types = "0.8"
+stylus-sdk = "0.7"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
+
+[features]
+export-abi = ["stylus-sdk/export-abi"]
+
+[lib]
+crate-type = ["lib", "cdylib"]
+
+[profile.release]
+codegen-units = 1
+strip = true
+lto = true
+panic = "abort"
+opt-level = "s"

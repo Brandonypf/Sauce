@@ -1,0 +1,54 @@
+# Relayer: UNA sola replica. No es una limitacion temporal ni falta de tiempo.
+#
+# Cada transaccion de Ethereum lleva un nonce que tiene que ser consecutivo por
+# cada direccion que firma. Si dos replicas leen el nonce a la vez —las dos ven
+# 42— ambas envian una transaccion con nonce 42. Una entra; la otra se rechaza o,
+# si paga mas gas, reemplaza a la primera. Y como la siguiente espera el 43, la
+# cola se atasca entera.
+#
+# Escalar esto no lo hace mas rapido: lo rompe.
+#
+# Si el volumen algun dia lo exige, la salida NO es subir `replicas`. Es repartir
+# el trabajo entre varias direcciones firmantes, cada una con su propio proceso y
+# su propio nonce.
+#
+# Segunda defensa, en el codigo: `pg_try_advisory_lock` en src/relayer/index.ts.
+# Si alguien hace `kubectl scale --replicas=3` sin leer esto, los dos pods de mas
+# arrancan, no consiguen el bloqueo y se quedan inactivos sin tocar la cola. Este
+# comentario se puede ignorar; el bloqueo no.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sauce-relayer
+  labels: { app: sauce-relayer }
+spec:
+  replicas: 1
+
+  # Recreate, no RollingUpdate: durante un despliegue rodante convivirian el pod
+  # viejo y el nuevo, que es justo lo que se quiere evitar.
+  strategy:
+    type: Recreate
+
+  selector:
+    matchLabels: { app: sauce-relayer }
+  template:
+    metadata:
+      labels: { app: sauce-relayer }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: relayer
+          image: sauce/api:latest
+          command: ["node", "dist/relayer/index.js"]
+          envFrom:
+            - configMapRef: { name: sauce-config }
+            - secretRef: { name: sauce-secrets }
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { cpu: 300m, memory: 384Mi }
+
+      # Una transaccion enviada y sin confirmar no debe quedar huerfana: se le da
+      # tiempo a terminar el trabajo en curso antes del SIGKILL.
+      terminationGracePeriodSeconds: 60

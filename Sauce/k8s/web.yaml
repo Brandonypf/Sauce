@@ -1,0 +1,61 @@
+# Frontend: archivos estaticos servidos por nginx. Sin estado y sin base de datos,
+# asi que escala mejor que nada en este repositorio.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sauce-web
+  labels: { app: sauce-web }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: sauce-web }
+  template:
+    metadata:
+      labels: { app: sauce-web }
+    spec:
+      containers:
+        - name: web
+          image: sauce/web:latest
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet: { path: /health, port: 80 }
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 20m, memory: 32Mi }
+            limits: { cpu: 200m, memory: 128Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sauce-web
+spec:
+  selector: { app: sauce-web }
+  ports:
+    - port: 80
+      targetPort: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sauce
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "16m"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: sauce.example
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: sauce-api
+                port: { number: 80 }
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: sauce-web
+                port: { number: 80 }
