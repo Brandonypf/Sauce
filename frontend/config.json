@@ -1,0 +1,8 @@
+{
+  "name": "base44",
+  "version": "0.1.0",
+  "environment": "development",
+  "public": {
+    "appName": "base44"
+  }
+}

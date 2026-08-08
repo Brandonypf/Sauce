@@ -1,0 +1,48 @@
+# Compiler files
+cache/
+out/
+
+# Commonly ignored directories
+.logs/
+.ignore/
+
+# Ignores development broadcast logs
+!/broadcast
+/broadcast/*/31337/
+/broadcast/**/dry-run/
+
+# Salida de `forge doc` (la carpeta docs/ de la raiz SI se versiona)
+contracts/docs/
+
+# Dotenv file
+.env
+.env.*
+!.env.example
+
+# Environment
+.env
+
+# Foundry
+broadcast/
+cache/
+out/
+
+# Node
+node_modules/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+# Backend
+backend/dist/
+backend/.env
+
+# Frontend
+frontend/out/
+frontend/.next/
+frontend/.env.local
+storage/
+backend/storage*/
