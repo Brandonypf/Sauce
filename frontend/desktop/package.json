@@ -1,0 +1,33 @@
+{
+  "name": "sauce-desktop",
+  "version": "0.1.0",
+  "description": "SAUCE — escritorio para Windows",
+  "main": "main.js",
+  "private": true,
+  "author": "SAUCE",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.sauce.desktop",
+    "productName": "SAUCE",
+    "files": ["main.js", "preload.js"],
+    "asar": false,
+    "win": {
+      "target": ["nsis"],
+      "signAndEditExecutable": false
+    },
+    "extraResources": [
+      {
+        "from": "../out",
+        "to": "app/out",
+        "filter": ["**/*"]
+      }
+    ]
+  }
+}

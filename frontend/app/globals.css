@@ -2,12 +2,45 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---------- Tokens de diseño ----------
+   tailwind.config.ts mapea todos los colores a estas variables. Hasta ahora no
+   estaban declaradas en ningún sitio, así que cada clase `bg-bg-surface` o
+   `text-text-primary` resolvía a un valor inválido y el componente se renderizaba
+   sin color. La paleta viene del spec del checkout: #16162a, #1e1e3f, #D94F3D,
+   #2D8A4E. Esto cierra la decisión 2.1 del README.
+------------------------------------------ */
+:root {
+  --bg-base: #16162a;
+  --bg-surface: #1e1e3f;
+  --bg-elevated: #26264d;
+
+  --text-primary: #f4f4f8;
+  --text-secondary: rgba(244, 244, 248, 0.72);
+  --text-tertiary: rgba(244, 244, 248, 0.48);
+
+  --accent-primary: #d94f3d;
+  --accent-hover: #e56552;
+  --accent-soft: rgba(217, 79, 61, 0.14);
+
+  --success: #2d8a4e;
+  --success-soft: rgba(45, 138, 78, 0.16);
+  --warning: #d9a13d;
+  --danger: #d94f5f;
+
+  --border-default: rgba(255, 255, 255, 0.12);
+  --border-hover: rgba(255, 255, 255, 0.22);
+  --border-focus: var(--accent-primary);
+
+  /* Sin next/font cargado todavía; la pila del sistema evita el salto de fuente. */
+  --font-inter: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+}
+
 html,
 body {
   height: 100%;
-  background: #16162a;
-  color: #fff;
-  font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-inter);
 }
 
 /* ---------- Vidrio base reutilizable ---------- */
