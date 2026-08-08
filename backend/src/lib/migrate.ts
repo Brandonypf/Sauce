@@ -3,8 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { pool } from "../db.js";
 
-const migrationsDir = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "migrations");
-
+const migrationsDir = join(process.cwd(), "migrations");
 /**
  * Aplica las migraciones pendientes.
  *

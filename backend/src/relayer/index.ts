@@ -4,6 +4,7 @@ import { arbitrum, arbitrumSepolia } from "viem/chains";
 import type { Hex } from "viem";
 import { pool } from "../db.js";
 import { env } from "../env.js";
+import { parseAbi } from "viem";
 
 /**
  * Relayer: el unico proceso que envia transacciones.
@@ -115,15 +116,39 @@ async function failJob(job: OutboxJob, error: unknown): Promise<void> {
     console.error(`[relayer] trabajo ${job.id} (${job.kind}) agotado tras ${job.attempts} intentos`);
   }
 }
+const contentRegistryAbi = parseAbi([
+  "function registerContent(string title,string metadataURI,bytes32 contentHash,uint256 referencePrice) returns (uint256)",
+]);
 
 async function processJob(job: OutboxJob): Promise<string | null> {
   switch (job.kind) {
-    case "register_content":
-      // Aqui iria contents.registerContent(...). Se deja explicito en vez de
-      // simulado para que no parezca que ya escribe en la cadena.
-      console.log(`[relayer] register_content pendiente de cablear: ${JSON.stringify(job.payload)}`);
-      return null;
+case "register_content": {
+  const { workId, contentHash, metadataUri } = job.payload as {
+    workId: string;
+    contentHash: string;
+    metadataUri: string;
+  };
 
+  const { wallet, publicClient } = clients();
+
+  const hash = await wallet.writeContract({
+    address: env.CONTENT_REGISTRY_ADDRESS as `0x${string}`,
+    abi: contentRegistryAbi,
+    functionName: "registerContent",
+    args: [
+      workId,
+      metadataUri,
+      contentHash as `0x${string}`,
+      0n,
+    ],
+  });
+
+  await publicClient.waitForTransactionReceipt({ hash });
+
+  console.log(`[relayer] register_content confirmado: ${hash}`);
+
+  return hash;
+}
     case "settle_order":
       // Las ordenes no se liquidan una por una: se acumulan y se cierran por
       // epoca. Este trabajo solo marca la orden como lista para el proximo lote.

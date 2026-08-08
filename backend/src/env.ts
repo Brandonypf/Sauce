@@ -12,6 +12,7 @@ const schema = z.object({
   CHAIN_ID: z.coerce.number().default(421614),
   RPC_URL: z.string().default("https://sepolia-rollup.arbitrum.io/rpc"),
   LICENSE_NFT_ADDRESS: z.string().default("0x0000000000000000000000000000000000000000"),
+  CONTENT_REGISTRY_ADDRESS: z.string().default("0x0000000000000000000000000000000000000000"),
 
   // La llave que firma vouchers EIP-712. Nunca sale de este proceso y jamas llega
   // al navegador: por eso el frontend no puede ser tambien el backend.
