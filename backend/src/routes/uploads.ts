@@ -14,19 +14,10 @@ import {
 /**
  * Subida de archivos en tres pasos.
  *
- *   1. POST /api/uploads              → reserva y devuelve URL prefirmada
- *   2. PUT  <url prefirmada>          → el navegador sube DIRECTO al almacén
- *   3. POST /api/uploads/:id/complete → el servidor verifica y cierra
- *
- * El paso 2 no toca este servidor cuando el driver es S3/R2. Es lo que permite
- * subir archivos de varios GB sin bloquear el proceso ni pagar el tráfico dos
- * veces.
- *
- * El paso 3 no es un trámite: es donde se comprueba que lo que hay en el almacén
- * es lo que se dijo que sería. Sin él, "ya subí el archivo" sería otra cosa que
- * el cliente afirma y el servidor cree.
+ * 1. POST /api/uploads              → reserva y devuelve URL prefirmada
+ * 2. PUT                            → el navegador sube DIRECTO al almacén
+ * 3. POST /api/uploads/:id/complete → el servidor verifica y cierra
  */
-
 const createBody = z.object({
   filename: z.string().min(1).max(255),
   mimeType: z.string().min(1).max(120),
@@ -50,17 +41,21 @@ export async function uploadRoutes(app: FastifyInstance) {
     if (body.sizeBytes > env.MAX_UPLOAD_BYTES) {
       throw badRequest(
         "file_too_large",
-        `El archivo supera el máximo de ${Math.floor(env.MAX_UPLOAD_BYTES / 1024 / 1024)} MB`,
+        `El archivo supera el máximo de ${Math.floor(
+          env.MAX_UPLOAD_BYTES / 1024 / 1024,
+        )} MB`,
       );
     }
 
-    // Si el mismo archivo ya está subido, se reutiliza en vez de volver a
-    // transferirlo. Con un catálogo de novelas visuales de varios GB esto ahorra
-    // tiempo real, no bytes teóricos.
     if (body.checksum) {
-      const existing = await pool.query<{ id: string; storage_key: string }>(
-        `SELECT id, storage_key FROM uploads
-          WHERE checksum = $1 AND status = 'completed'`,
+      const existing = await pool.query<{
+        id: string;
+        storage_key: string;
+      }>(
+        `SELECT id, storage_key
+           FROM uploads
+          WHERE checksum = $1
+            AND status = 'completed'`,
         [body.checksum],
       );
 
@@ -96,12 +91,19 @@ export async function uploadRoutes(app: FastifyInstance) {
       const id = rows[0]!.id;
       const key = buildStorageKey(body.purpose, id, body.filename);
 
-      await db.query("UPDATE uploads SET storage_key = $2 WHERE id = $1", [id, key]);
+      await db.query(
+        "UPDATE uploads SET storage_key = $2 WHERE id = $1",
+        [id, key],
+      );
 
       return { id, key };
     });
 
-    const presigned = await driver.presignUpload(created.key, body.mimeType, body.sizeBytes);
+    const presigned = await driver.presignUpload(
+      created.key,
+      body.mimeType,
+      body.sizeBytes,
+    );
 
     return {
       uploadId: created.id,
@@ -112,11 +114,6 @@ export async function uploadRoutes(app: FastifyInstance) {
 
   /**
    * Cierra la subida.
-   *
-   * Se comprueba tamaño y, cuando el driver puede calcularlo, el hash real del
-   * objeto contra el que declaró el navegador. Con S3 la comprobación la hace el
-   * propio almacén mediante `ChecksumSHA256` en la petición prefirmada, porque
-   * descargar varios GB para hashearlos aquí no es viable.
    */
   app.post("/api/uploads/:id/complete", async (request) => {
     const user = requireSession(request.user);
@@ -129,26 +126,46 @@ export async function uploadRoutes(app: FastifyInstance) {
       status: string;
       user_id: string;
     }>(
-      `SELECT storage_key, declared_size, status, user_id FROM uploads WHERE id = $1`,
+      `SELECT storage_key, declared_size, status, user_id
+         FROM uploads
+        WHERE id = $1`,
       [id],
     );
 
     const upload = rows[0];
-    if (!upload) throw notFound("Subida desconocida");
-    if (upload.user_id !== user.userId) throw forbidden("Esta subida no es tuya");
+
+    if (!upload) {
+      throw notFound("Subida desconocida");
+    }
+
+    if (upload.user_id !== user.userId) {
+      throw forbidden("Esta subida no es tuya");
+    }
 
     if (upload.status === "completed") {
-      return { uploadId: id, status: "completed", alreadyCompleted: true };
+      return {
+        uploadId: id,
+        status: "completed",
+        alreadyCompleted: true,
+      };
     }
 
     if (upload.status !== "pending") {
-      throw conflict("upload_not_pending", `La subida está en estado ${upload.status}`);
+      throw conflict(
+        "upload_not_pending",
+        `La subida está en estado ${upload.status}`,
+      );
     }
 
     const driver = await storage();
     const head = await driver.head(upload.storage_key);
 
-    if (!head) throw badRequest("not_uploaded", "No se encontró el archivo en el almacenamiento");
+    if (!head) {
+      throw badRequest(
+        "not_uploaded",
+        "No se encontró el archivo en el almacenamiento",
+      );
+    }
 
     if (head.size !== Number(upload.declared_size)) {
       throw badRequest(
@@ -160,29 +177,43 @@ export async function uploadRoutes(app: FastifyInstance) {
     const actual = await driver.checksum(upload.storage_key);
 
     if (actual && actual !== body.checksum) {
-      // El archivo llegó corrupto o alguien intentó subir algo distinto de lo
-      // que declaró. En ambos casos no puede convertirse en el contentHash de
-      // una atestación on-chain.
-      throw badRequest("checksum_mismatch", "El hash del archivo no coincide con el declarado");
+      throw badRequest(
+        "checksum_mismatch",
+        "El hash del archivo no coincide con el declarado",
+      );
     }
 
     await pool.query(
       `UPDATE uploads
-          SET status = 'completed', actual_size = $2, checksum = $3, completed_at = now()
+          SET status = 'completed',
+              actual_size = $2,
+              checksum = $3,
+              completed_at = now()
         WHERE id = $1`,
       [id, head.size, body.checksum],
     );
 
-    return { uploadId: id, status: "completed", sizeBytes: head.size, checksum: body.checksum };
+    return {
+      uploadId: id,
+      status: "completed",
+      sizeBytes: head.size,
+      checksum: body.checksum,
+    };
   });
 
   app.post("/api/uploads/:id/abort", async (request) => {
     const user = requireSession(request.user);
     const { id } = request.params as { id: string };
 
-    const { rows } = await pool.query<{ storage_key: string; user_id: string }>(
-      `UPDATE uploads SET status = 'aborted'
-        WHERE id = $1 AND user_id = $2 AND status = 'pending'
+    const { rows } = await pool.query<{
+      storage_key: string;
+      user_id: string;
+    }>(
+      `UPDATE uploads
+          SET status = 'aborted'
+        WHERE id = $1
+          AND user_id = $2
+          AND status = 'pending'
         RETURNING storage_key, user_id`,
       [id, user.userId],
     );
@@ -192,42 +223,75 @@ export async function uploadRoutes(app: FastifyInstance) {
       await driver.remove(rows[0].storage_key);
     }
 
-    return { aborted: Boolean(rows[0]) };
+    return {
+      aborted: Boolean(rows[0]),
+    };
   });
 
   /**
    * Destino de la URL prefirmada del driver local.
    *
-   * En producción con S3/R2 esta ruta no se usa: el navegador sube directo al
-   * almacén. Existe para que el flujo completo se pueda probar en local sin
-   * cuenta de Cloudflare, recorriendo exactamente los mismos pasos.
+   * Esta ruta solo existe cuando STORAGE_DRIVER=local.
    */
   app.put("/api/uploads/data/*", async (request, reply) => {
     if (env.STORAGE_DRIVER !== "local") {
       throw notFound("Esta ruta solo existe con el driver local");
     }
 
-    const key = decodeURIComponent((request.params as Record<string, string>)["*"] ?? "");
-    const { expires, signature } = request.query as { expires?: string; signature?: string };
+    const key =
+      decodeURIComponent(
+        (request.params as Record<string, string>)["*"] ?? "",
+      );
 
-    if (!expires || !signature || !verifyStorageSignature(key, expires, signature)) {
+    const { expires, signature } = request.query as {
+      expires?: string;
+      signature?: string;
+    };
+
+    if (
+      !expires ||
+      !signature ||
+      !verifyStorageSignature(key, expires, signature)
+    ) {
       throw forbidden("URL de subida inválida o vencida");
     }
 
     const size = await writeLocalObject(key, request.raw);
 
-    return reply.code(200).send({ key, sizeBytes: size });
+    return reply.code(200).send({
+      key,
+      sizeBytes: size,
+    });
   });
 
+  /**
+   * Descarga/lectura protegida del contenido.
+   *
+   * IMPORTANTE:
+   * Se establece explícitamente Content-Type y Content-Disposition.
+   * Esto permite que el visor PDF nativo del navegador pueda renderizar
+   * correctamente el documento dentro del iframe del Reader.
+   */
   app.get("/api/uploads/data/*", async (request, reply) => {
     if (env.STORAGE_DRIVER !== "local") {
       throw notFound("Esta ruta solo existe con el driver local");
     }
 
-    const key = decodeURIComponent((request.params as Record<string, string>)["*"] ?? "");
-    const { expires, signature } = request.query as { expires?: string; signature?: string };
+    const key =
+      decodeURIComponent(
+        (request.params as Record<string, string>)["*"] ?? "",
+      );
 
-    if (!expires || !signature || !verifyStorageSignature(key, expires, signature)) {
+    const { expires, signature } = request.query as {
+      expires?: string;
+      signature?: string;
+    };
+
+    if (
+      !expires ||
+      !signature ||
+      !verifyStorageSignature(key, expires, signature)
+    ) {
       throw forbidden("URL de descarga inválida o vencida");
     }
 
@@ -237,7 +301,30 @@ export async function uploadRoutes(app: FastifyInstance) {
     const root = resolve(env.STORAGE_LOCAL_DIR);
     const full = resolve(join(root, key));
 
-    if (!full.startsWith(root)) throw forbidden("Ruta inválida");
+    if (!full.startsWith(root)) {
+      throw forbidden("Ruta inválida");
+    }
+
+    /*
+     * Recuperamos el MIME real asociado al archivo.
+     * Así no dependemos únicamente de la extensión.
+     */
+    const { rows } = await pool.query<{
+      mime_type: string;
+      filename: string;
+    }>(
+      `SELECT mime_type, filename
+         FROM uploads
+        WHERE storage_key = $1
+          AND status = 'completed'
+        LIMIT 1`,
+      [key],
+    );
+
+    const mimeType = rows[0]?.mime_type ?? "application/octet-stream";
+
+    reply.header("Content-Type", mimeType);
+    reply.header("Content-Disposition", "inline");
 
     return reply.send(createReadStream(full));
   });

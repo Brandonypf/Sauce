@@ -19,7 +19,8 @@ export async function libraryRoutes(app: FastifyInstance) {
          JOIN creators c ON c.id = w.creator_id
     LEFT JOIN orders o ON o.id = e.order_id
     LEFT JOIN vouchers v ON v.order_id = o.id
-        WHERE e.user_id = $1 AND e.revoked_at IS NULL
+        WHERE e.user_id = $1
+          AND e.revoked_at IS NULL
         ORDER BY e.created_at DESC`,
       [user.userId],
     );
@@ -36,45 +37,64 @@ export async function libraryRoutes(app: FastifyInstance) {
         acquiredAt: r.acquired_at,
         source: r.source,
         orderId: r.order_id,
-        // El voucher pendiente no bloquea el acceso: el usuario ya pago. Solo
-        // indica que todavia no reclamo el recibo on-chain.
         onchainClaimed: Boolean(r.redeemed_at),
       })),
     };
   });
 
-  /**
-   * Entrega el contenido.
-   *
-   * Este endpoint es el control de acceso real. No `balanceOf`, no el store de
-   * zustand: una consulta a `entitlements` en cada acceso, y una URL firmada que
-   * caduca en minutos. Un saldo de token no puede proteger un archivo porque
-   * cualquiera puede leerlo, pero solo este servidor decide si entrega los bytes.
-   */
   app.post("/api/works/:slug/access", async (request) => {
     const user = requireSession(request.user);
     const { slug } = request.params as { slug: string };
 
-    const { rows } = await pool.query(
-      `SELECT w.id, w.slug, e.id AS entitlement_id
-         FROM works w
-    LEFT JOIN entitlements e
-           ON e.work_id = w.id AND e.user_id = $2 AND e.revoked_at IS NULL
-        WHERE lower(w.slug) = lower($1)`,
+    const { rows } = await pool.query<{
+      slug: string;
+      content_hash: string;
+      entitlement_id: string | null;
+      storage_key: string | null;
+    }>(
+      `SELECT
+          w.slug,
+          w.content_hash,
+          e.id AS entitlement_id,
+          u.storage_key
+       FROM works w
+       LEFT JOIN entitlements e
+         ON e.work_id = w.id
+        AND e.user_id = $2
+        AND e.revoked_at IS NULL
+       LEFT JOIN uploads u
+         ON lower(u.checksum) =
+            lower(REPLACE(w.content_hash, '0x', ''))
+        AND u.status = 'completed'
+       WHERE lower(w.slug) = lower($1)`,
       [slug, user.userId],
     );
 
     const row = rows[0];
-    if (!row) throw notFound("Obra no encontrada");
-    if (!row.entitlement_id) throw forbidden("No tienes licencia de esta obra");
 
-    const expiresAt = Math.floor(Date.now() / 1000) + env.CONTENT_URL_TTL_SECONDS;
+    if (!row) {
+      throw notFound("Obra no encontrada");
+    }
+
+    if (!row.entitlement_id) {
+      throw forbidden("No tienes licencia de esta obra");
+    }
+
+    if (!row.storage_key) {
+      throw notFound("El contenido de la obra no está disponible");
+    }
+
+    const expiresAt =
+      Math.floor(Date.now() / 1000) + env.CONTENT_URL_TTL_SECONDS;
+
     const token = createHmac("sha256", env.GATEWAY_WEBHOOK_SECRET)
-      .update(`${row.slug}:${user.userId}:${expiresAt}`)
+      .update(`${row.storage_key}:${expiresAt}`)
       .digest("hex");
 
     return {
-      url: `/content/${row.slug}?exp=${expiresAt}&sig=${token}`,
+      url:
+        `/api/uploads/data/${encodeURIComponent(row.storage_key)}` +
+        `?expires=${expiresAt}&signature=${token}`,
       expiresAt,
     };
   });

@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
   Dialog,
@@ -12,6 +13,7 @@ import { SuccessView } from "./SuccessView";
 import { api } from "@/api/client";
 
 export function CheckoutModal({ open, onOpenChange, item, onComplete }) {
+  const queryClient = useQueryClient();
   const [status, setStatus] = useState("payment");
   const [error, setError] = useState(null);
 
@@ -29,11 +31,17 @@ export function CheckoutModal({ open, onOpenChange, item, onComplete }) {
 
       await api.dev.pay(checkout.orderId);
 
+      await queryClient.invalidateQueries({
+        queryKey: ["library"],
+      });
+
       setStatus("success");
       onComplete?.(item);
     } catch (err) {
       console.error("Error procesando compra:", err);
-      setError(err?.message || "No se pudo completar la compra.");
+      setError(
+        err?.message || "No se pudo completar la compra.",
+      );
       setStatus("payment");
     }
   };
@@ -54,7 +62,7 @@ export function CheckoutModal({ open, onOpenChange, item, onComplete }) {
         if (!next) handleClose();
       }}
     >
-      <DialogContent className="sm:max-w-md">
+      <DialogContent>
         {status === "processing" && <ProcessingOverlay />}
 
         {status === "success" && (
