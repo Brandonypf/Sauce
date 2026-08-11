@@ -2,7 +2,16 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { after, before, describe, test } from "node:test";
 
-process.env.DATABASE_URL ??= "postgres://postgres:postgres@localhost:5432/sauce_test";
+const testUrl =
+  process.env.TEST_DATABASE_URL ?? "postgres://postgres:postgres@127.0.0.1:5432/sauce_test";
+
+// Estas pruebas escriben y borran datos. Si DATABASE_URL apuntara a Supabase,
+// tocarian la base compartida del equipo.
+if (/supabase|pooler\.supabase|amazonaws/i.test(testUrl)) {
+  throw new Error("Las pruebas NO pueden correr contra una base remota.");
+}
+
+process.env.DATABASE_URL = testUrl;
 process.env.ISSUER_PRIVATE_KEY ??=
   "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 process.env.LICENSE_NFT_ADDRESS ??= "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9";

@@ -24,6 +24,10 @@ const schema = z.object({
     .coerce.number()
     .default(24 * 7),
 
+  // Coste de bcrypt. 12 es el punto razonable: unos 250 ms por hash, caro para
+  // quien prueba millones y despreciable para quien inicia sesion una vez.
+  BCRYPT_ROUNDS: z.coerce.number().min(4).max(15).default(12),
+
   CHAIN_ID: z
     .coerce.number()
     .default(421614),

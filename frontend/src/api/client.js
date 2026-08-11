@@ -11,11 +11,25 @@ import { API_URL } from "@/lib/app-params";
  */
 
 export class ApiError extends Error {
-  constructor(status, code, message) {
+  constructor(status, code, message, issues = []) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
+
+    // Detalle de validacion de zod: [{ path, message }]. Sin esto, una
+    // contrasena de 8 caracteres solo produce "Datos invalidos" y el usuario no
+    // tiene forma de saber que le falta.
+    this.issues = issues;
+  }
+
+  /** Mensaje pensado para mostrar en pantalla, no para el log. */
+  get displayMessage() {
+    if (this.issues?.length) {
+      return this.issues.map((i) => i.message).join(". ");
+    }
+
+    return this.message;
   }
 }
 
@@ -36,6 +50,7 @@ async function request(path, init = {}) {
       response.status,
       body?.error ?? "unknown",
       body?.message ?? `Error ${response.status}`,
+      body?.issues ?? [],
     );
   }
 
@@ -44,6 +59,18 @@ async function request(path, init = {}) {
 
 export const api = {
   auth: {
+    register: (input) =>
+      request("/api/auth/register", { method: "POST", body: JSON.stringify(input) }),
+
+    login: (input) =>
+      request("/api/auth/login", { method: "POST", body: JSON.stringify(input) }),
+
+    linkWallet: (address, nonce, signature) =>
+      request("/api/auth/link-wallet", {
+        method: "POST",
+        body: JSON.stringify({ address, nonce, signature }),
+      }),
+
     nonce: () => request("/api/auth/nonce"),
 
     verify: (address, nonce, signature) =>

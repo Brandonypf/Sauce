@@ -28,6 +28,7 @@ export function Register() {
     setError("");
     const res = await googleSignIn();
     if (res.ok) navigate("/", { replace: true });
+    else setError(res.error);
   };
 
   return (

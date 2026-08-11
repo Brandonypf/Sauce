@@ -67,7 +67,7 @@ export async function fulfillOrder(
     status: string;
     usdc_amount: string;
     content_id: string | null;
-    wallet: string;
+    wallet: string | null;
   }>(
     `SELECT o.id, o.user_id, o.work_id, o.status, o.usdc_amount, w.content_id, u.wallet
        FROM orders o
@@ -108,13 +108,17 @@ export async function fulfillOrder(
   // comprador puede abrir su contenido igual — lo que falta es el recibo on-chain.
   // Se encola para firmarlo cuando la registracion confirme, en vez de negar la
   // compra o bloquear el webhook esperando a la cadena.
-  if (!order.content_id) {
+  if (!order.content_id || !order.wallet) {
     await db.query(`INSERT INTO outbox (kind, payload) VALUES ('issue_voucher', $1)`, [
-      JSON.stringify({ orderId }),
+      JSON.stringify({ orderId, reason: !order.wallet ? "no_wallet" : "no_content_id" }),
     ]);
   }
 
-  if (order.content_id) {
+  // Sin wallet no hay direccion a la que emitir el voucher. El comprador accede
+  // igual a su contenido —el entitlement ya se creo arriba y es lo que decide el
+  // acceso—, pero el recibo on-chain queda pendiente hasta que vincule una.
+  // Emitirlo hacia una direccion inventada seria peor que no emitirlo.
+  if (order.content_id && order.wallet) {
     const expiry = BigInt(Math.floor(Date.now() / 1000) + env.VOUCHER_TTL_DAYS * 86_400);
 
     const payloadVoucher = {
@@ -159,7 +163,7 @@ export async function fulfillOrder(
  * `content_id`. Lo usa el relayer al confirmar `register_content`.
  */
 export async function issueVoucherForOrder(db: Db, orderId: string): Promise<boolean> {
-  const { rows } = await db.query<{ wallet: string; content_id: string | null }>(
+  const { rows } = await db.query<{ wallet: string | null; content_id: string | null }>(
     `SELECT u.wallet, w.content_id
        FROM orders o
        JOIN users u ON u.id = o.user_id
@@ -169,7 +173,10 @@ export async function issueVoucherForOrder(db: Db, orderId: string): Promise<boo
   );
 
   const row = rows[0];
-  if (!row?.content_id) return false;
+
+  // Las dos condiciones tienen que cumplirse: obra registrada en cadena y usuario
+  // con wallet. El trabajo se reencola hasta que ambas se den.
+  if (!row?.content_id || !row.wallet) return false;
 
   const expiry = BigInt(Math.floor(Date.now() / 1000) + env.VOUCHER_TTL_DAYS * 86_400);
 

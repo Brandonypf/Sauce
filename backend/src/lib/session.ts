@@ -63,11 +63,17 @@ export async function verifySignature(
 }
 
 export async function upsertUser(db: Db, wallet: string): Promise<string> {
-  // ON CONFLICT en vez de "SELECT y si no existe INSERT": dos pestañas
+  // ON CONFLICT en vez de "SELECT y si no existe INSERT": dos pestanas
   // autenticandose a la vez no crean dos usuarios.
+  //
+  // El predicado `WHERE wallet IS NOT NULL` no es decorativo: desde la migracion
+  // 004 el indice unico es parcial, y Postgres solo lo usa para inferir el
+  // conflicto si el ON CONFLICT repite exactamente el mismo predicado. Sin el
+  // falla con 42P10 y el login por wallet deja de funcionar.
   const { rows } = await db.query<{ id: string }>(
     `INSERT INTO users (wallet) VALUES ($1)
-     ON CONFLICT (lower(wallet)) DO UPDATE SET wallet = EXCLUDED.wallet
+     ON CONFLICT (lower(wallet)) WHERE wallet IS NOT NULL
+     DO UPDATE SET wallet = EXCLUDED.wallet
      RETURNING id`,
     [wallet.toLowerCase()],
   );
