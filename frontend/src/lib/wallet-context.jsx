@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useState } from "react";
 import { useToast } from "@/components/use-toast";
 import { api } from "@/api/client";
+import { useAuth } from "@/lib/AuthContext";
 
 const DEMO_ADDRESS = "0x5c554263A55a59adb30f6eeDB978EEf252dd0d72";
 const DEMO_CHAIN_ID = 421614;
@@ -20,9 +21,23 @@ function buildSiweMessage(address, nonce) {
 
 export function WalletProvider({ children }) {
   const { toast } = useToast();
-  const [address, setAddress] = useState(null);
+  const { user, isAuthenticated, refresh } = useAuth();
   const [chainId, setChainId] = useState(null);
   const [isConnecting, setIsConnecting] = useState(false);
+
+  // Estado local solo para la sesion de wallet-only, donde todavia no hay
+  // usuario en el backend cuando se dibuja.
+  const [localAddress, setLocalAddress] = useState(null);
+
+  /**
+   * La direccion la manda el BACKEND, no este contexto.
+   *
+   * Antes vivia en un `useState` y nada la rehidrataba: al recargar volvia a
+   * null y la wallet desaparecia de la interfaz aunque el backend la tuviera
+   * guardada. Ahora sale de `GET /api/auth/me`, que es estado de servidor y
+   * sobrevive a F5 sin tocar localStorage.
+   */
+  const address = user?.wallet ?? localAddress;
 
   const connect = useCallback(async () => {
     setIsConnecting(true);
@@ -31,7 +46,7 @@ export function WalletProvider({ children }) {
       if (!window.ethereum) {
         await new Promise((resolve) => setTimeout(resolve, 600));
 
-        setAddress(DEMO_ADDRESS);
+        setLocalAddress(DEMO_ADDRESS);
         setChainId(DEMO_CHAIN_ID);
 
         toast({
@@ -73,17 +88,38 @@ export function WalletProvider({ children }) {
         params: [message, walletAddress],
       });
 
-      // 6. Verificar la firma y crear sesión en el backend
-      await api.auth.verify(walletAddress, nonce, signature);
+      /**
+       * 6. Vincular o iniciar sesion, segun corresponda.
+       *
+       * Este era el bug real del F5. `verify` es el LOGIN por wallet: llama a
+       * `upsertUser(wallet)`, que crea o encuentra un usuario distinto y emite
+       * una cookie nueva. Si el usuario ya habia entrado con email, conectar la
+       * wallet lo sacaba de su cuenta y lo metia en otra sin email.
+       *
+       * Por eso al recargar "desaparecian el usuario y la wallet": la sesion ya
+       * no era la suya. Con sesion abierta hay que VINCULAR, no volver a entrar.
+       */
+      if (isAuthenticated) {
+        await api.auth.linkWallet(walletAddress, nonce, signature);
 
-      // 7. Guardar estado local de wallet
-      setAddress(walletAddress);
+        toast({
+          title: "Wallet vinculada",
+          description: "Ya puedes reclamar tus licencias on-chain.",
+        });
+      } else {
+        await api.auth.verify(walletAddress, nonce, signature);
+
+        toast({
+          title: "Wallet conectada",
+          description: "Sesion autenticada correctamente.",
+        });
+      }
+
+      setLocalAddress(walletAddress);
       setChainId(currentChainId);
 
-      toast({
-        title: "Wallet conectada",
-        description: "Sesión autenticada correctamente.",
-      });
+      // Releer del backend: `user.wallet` pasa a ser la fuente de verdad.
+      await refresh();
     } catch (err) {
       console.error(err);
 
@@ -96,7 +132,7 @@ export function WalletProvider({ children }) {
     } finally {
       setIsConnecting(false);
     }
-  }, [toast]);
+  }, [toast, isAuthenticated, refresh]);
 
   const disconnect = useCallback(async () => {
     try {
@@ -105,9 +141,10 @@ export function WalletProvider({ children }) {
       console.error("Error cerrando sesión:", err);
     }
 
-    setAddress(null);
+    setLocalAddress(null);
     setChainId(null);
-  }, []);
+    await refresh();
+  }, [refresh]);
 
   return (
     <WalletContext.Provider

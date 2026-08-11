@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, FileText, Loader2, UploadCloud, X } from "lucide-react";
+import { CheckCircle2, FileText, Image as ImageIcon, Loader2, UploadCloud, X } from "lucide-react";
 import { Button } from "@/components/button";
 import { Input } from "@/components/input";
 import { Label } from "@/components/label";
@@ -38,6 +38,10 @@ export function PublishForm() {
   const queryClient = useQueryClient();
   const { upload, progress, phase, error, reset } = useUpload();
 
+  // Hook aparte para la portada: es un archivo independiente del contenido y
+  // compartir estado haria que una barra de progreso pisara a la otra.
+  const cover = useUpload();
+
   const [form, setForm] = useState({
     title: "",
     description: "",
@@ -47,6 +51,8 @@ export function PublishForm() {
 
   const [file, setFile] = useState(null);
   const [uploadId, setUploadId] = useState(null);
+  const [coverUploadId, setCoverUploadId] = useState(null);
+  const [coverPreview, setCoverPreview] = useState(null);
   const [publishing, setPublishing] = useState(false);
 
   const set = (key) => (e) =>
@@ -71,6 +77,26 @@ export function PublishForm() {
     }
   };
 
+  const handleCover = async (chosen) => {
+    // `createObjectURL` da vista previa inmediata, sin esperar a la subida. Se
+    // revoca al reemplazar para no acumular blobs en memoria.
+    setCoverPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(chosen);
+    });
+
+    try {
+      const result = await cover.upload(chosen, "cover");
+      setCoverUploadId(result.uploadId);
+    } catch {
+      toast({
+        title: "No se pudo subir la portada",
+        description: cover.error,
+        variant: "destructive",
+      });
+    }
+  };
+
   const publish = async () => {
     if (!uploadId) return;
 
@@ -86,6 +112,7 @@ export function PublishForm() {
         description: form.description,
         category: form.format,
         uploadId,
+        coverUploadId: coverUploadId ?? undefined,
         priceMinor,
         priceCurrency: "PEN",
       });
@@ -97,7 +124,13 @@ export function PublishForm() {
       setForm({ title: "", description: "", format: "visual_novel", priceSoles: "" });
       setFile(null);
       setUploadId(null);
+      setCoverUploadId(null);
+      setCoverPreview((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
       reset();
+      cover.reset();
     } catch (e) {
       toast({
         title: "No se pudo publicar",
@@ -171,9 +204,27 @@ export function PublishForm() {
             className="max-w-40"
           />
           <p className="text-xs text-muted-foreground">
-            Deja 0 para publicarla gratis.
+            {Number(form.priceSoles || 0) === 0
+              ? "Gratis: los usuarios la obtendran sin pasar por el checkout."
+              : "Los compradores pagaran este importe en soles."}
           </p>
         </div>
+
+        <CoverField
+          preview={coverPreview}
+          phase={cover.phase}
+          progress={cover.progress}
+          uploaded={Boolean(coverUploadId)}
+          onPick={handleCover}
+          onClear={() => {
+            setCoverUploadId(null);
+            setCoverPreview((prev) => {
+              if (prev) URL.revokeObjectURL(prev);
+              return null;
+            });
+            cover.reset();
+          }}
+        />
 
         <FileField
           file={file}
@@ -283,6 +334,83 @@ function FileField({ file, phase, progress, uploadId, error, onPick, onClear }) 
               className="shrink-0 rounded p-1 text-muted-foreground hover:text-foreground"
             >
               <X className="size-4" />
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+/**
+ * Campo de portada.
+ *
+ * Separado del archivo de contenido a proposito: son cosas distintas. La portada
+ * se ve en el catalogo y es publica; el contenido esta protegido por licencia.
+ *
+ * La vista previa sale de `createObjectURL`, asi que aparece al instante sin
+ * esperar a que termine la subida.
+ */
+function CoverField({ preview, phase, progress, uploaded, onPick, onClear }) {
+  const busy = ["hashing", "reserving", "uploading", "verifying"].includes(phase);
+
+  return (
+    <div className="space-y-2">
+      <Label>Portada (opcional)</Label>
+
+      <div className="flex items-start gap-4">
+        <div className="aspect-cover w-28 shrink-0 overflow-hidden rounded-lg border bg-sakura-glow">
+          {preview ? (
+            <img src={preview} alt="Vista previa" className="size-full object-cover" />
+          ) : (
+            <div className="grid size-full place-items-center px-2 text-center text-[11px] text-muted-foreground">
+              Sin portada
+            </div>
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1 space-y-2">
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm hover:bg-sakura-glow">
+            <ImageIcon className="size-4 text-coral" />
+            {preview ? "Cambiar portada" : "Elegir imagen"}
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              hidden
+              onChange={(e) => {
+                const chosen = e.target.files?.[0];
+                if (chosen) onPick(chosen);
+                e.target.value = "";
+              }}
+            />
+          </label>
+
+          <p className="text-xs text-muted-foreground">JPG, PNG o WebP. Proporcion 3:4.</p>
+
+          {busy && (
+            <div className="h-1.5 overflow-hidden rounded-full bg-sakura-glow">
+              <div
+                className="h-full rounded-full bg-coral transition-[width]"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          )}
+
+          {uploaded && (
+            <p className="flex items-center gap-1.5 text-xs text-success">
+              <CheckCircle2 className="size-3.5" />
+              Portada lista
+            </p>
+          )}
+
+          {preview && !busy && (
+            <button
+              type="button"
+              onClick={onClear}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              Quitar
             </button>
           )}
         </div>

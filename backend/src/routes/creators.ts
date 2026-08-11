@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { isUniqueViolation, pool, tx } from "../db.js";
+import { env } from "../env.js";
 import { badRequest, conflict, forbidden } from "../lib/errors.js";
 import { requireSession } from "../lib/session.js";
 
@@ -15,7 +16,15 @@ const registerBody = z.object({
 const publishBody = z.object({
   title: z.string().min(1).max(120),
   description: z.string().max(2000).default(""),
-  category: z.string().min(1),
+  // `format` es la fuente de verdad y coincide con el enum `work_format` de
+  // Postgres. Antes se aceptaba `category` como texto libre y NUNCA se escribia
+  // `format`, que se quedaba en su valor por defecto 'game': por eso toda obra
+  // aparecia como juego sin importar lo que eligiera el creador.
+  //
+  // Se acepta `format` o `category` para no romper a quien ya envia el nombre
+  // viejo, pero ambos se validan contra el mismo enum.
+  format: z.enum(["game", "manga", "visual_novel", "artbook", "audio"]).optional(),
+  category: z.enum(["game", "manga", "visual_novel", "artbook", "audio"]).optional(),
   coverUrl: z.string().url().or(z.literal("")).default(""),
   // El hash ya no lo declara el cliente a mano: sale de una subida completada y
   // verificada. Antes se podía publicar cualquier hash sin tener el archivo.
@@ -109,6 +118,35 @@ export async function creatorRoutes(app: FastifyInstance) {
       throw badRequest("upload_incomplete", "Termina de subir el archivo antes de publicar");
     }
 
+    // Un solo valor alimenta `format` y `category`, asi no pueden divergir.
+    const formato = body.format ?? body.category;
+
+    if (!formato) {
+      throw badRequest("missing_format", "Indica el formato de la obra");
+    }
+
+    // Portada: opcional a proposito. Una obra sin portada debe seguir
+    // publicandose; la interfaz ya dibuja un hueco cuando falta.
+    let coverUrl = body.coverUrl ?? "";
+
+    if (body.coverUploadId) {
+      const portada = await pool.query<{ storage_key: string; status: string; user_id: string }>(
+        `SELECT storage_key, status, user_id FROM uploads WHERE id = $1`,
+        [body.coverUploadId],
+      );
+
+      const cov = portada.rows[0];
+      if (!cov) throw badRequest("unknown_cover", "La portada no existe");
+      if (cov.user_id !== user.userId) throw forbidden("Esa portada no es tuya");
+      if (cov.status !== "completed") {
+        throw badRequest("cover_incomplete", "Termina de subir la portada");
+      }
+
+      // Se guarda la ruta de acceso, no una URL firmada: las firmadas caducan y
+      // guardar uno seria guardar un permiso vencido. La portada es publica.
+      coverUrl = `${env.PUBLIC_API_URL}/api/uploads/public/${encodeURIComponent(cov.storage_key)}`;
+    }
+
     const contentHash = `0x${file.checksum}`;
     const slug = slugify(body.title);
 
@@ -116,17 +154,17 @@ export async function creatorRoutes(app: FastifyInstance) {
       return await tx(async (db) => {
         const { rows } = await db.query(
           `INSERT INTO works
-             (creator_id, slug, title, description, category, cover_url,
+             (creator_id, slug, title, description, category, format, cover_url,
               content_hash, price_minor, price_currency, status, published_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'published', now())
-           RETURNING id, slug, title, status`,
+           VALUES ($1, $2, $3, $4, $5::text, $5::work_format, $6, $7, $8, $9, 'published', now())
+           RETURNING id, slug, title, status, format`,
           [
             creator.rows[0]!.id,
             slug,
             body.title,
             body.description,
-            body.category,
-            body.coverUrl,
+            formato,
+            coverUrl,
             contentHash.toLowerCase(),
             body.priceMinor,
             body.priceCurrency,

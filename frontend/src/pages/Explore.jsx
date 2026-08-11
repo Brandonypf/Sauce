@@ -32,7 +32,7 @@ export function Explore() {
   const [format, setFormat] = useState("");
   const [checkoutItem, setCheckoutItem] = useState(null);
 
-  const { data, isLoading, isError, error } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["works", { format, q: query }],
     queryFn: () => api.works.list({ format, q: query || undefined }),
     // El usuario sigue escribiendo: se mantiene la lista anterior visible en vez
@@ -111,6 +111,7 @@ export function Explore() {
           item={checkoutItem}
           open
           onOpenChange={(open) => !open && setCheckoutItem(null)}
+          onComplete={() => refetch()}
         />
       )}
     </div>

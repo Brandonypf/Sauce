@@ -272,6 +272,41 @@ export async function uploadRoutes(app: FastifyInstance) {
    * Esto permite que el visor PDF nativo del navegador pueda renderizar
    * correctamente el documento dentro del iframe del Reader.
    */
+  /**
+   * Portadas: publicas y sin firma.
+   *
+   * Una portada aparece en el catalogo abierto, asi que no hay nada que
+   * proteger. Firmarla obligaria a renovar la URL en cada render y romperia el
+   * cache del navegador.
+   *
+   * Solo sirve claves bajo `cover/`: sin esa comprobacion, esta ruta seria un
+   * agujero para descargar cualquier obra sin licencia.
+   */
+  app.get("/api/uploads/public/*", async (request, reply) => {
+    const key = decodeURIComponent((request.params as Record<string, string>)["*"] ?? "");
+
+    if (!key.startsWith("cover/")) {
+      throw forbidden("Solo las portadas son publicas");
+    }
+
+    const driver = await storage();
+
+    if (env.STORAGE_DRIVER !== "local") {
+      return reply.redirect(await driver.presignDownload(key, 3600));
+    }
+
+    const { createReadStream } = await import("node:fs");
+    const { resolve, join } = await import("node:path");
+
+    const root = resolve(env.STORAGE_LOCAL_DIR);
+    const full = resolve(join(root, key));
+
+    if (!full.startsWith(root)) throw forbidden("Ruta invalida");
+
+    reply.header("Cache-Control", "public, max-age=86400");
+    return reply.send(createReadStream(full));
+  });
+
   app.get("/api/uploads/data/*", async (request, reply) => {
     if (env.STORAGE_DRIVER !== "local") {
       throw notFound("Esta ruta solo existe con el driver local");

@@ -105,8 +105,10 @@ export function ContentCard({ item, onBuy, owned = false, top = false }) {
                   ? "Gratis"
                   : formatMinor(priceMinor ?? 0, priceCurrency)}
               </span>
+              {/* Gratis y de pago se distinguen desde la propia tarjeta: pedir
+                  "Comprar" por algo que no cuesta nada hace dudar al usuario. */}
               <Button size="sm" onClick={() => onBuy?.(item)}>
-                Comprar
+                {priceMinor === 0 ? "Obtener" : "Comprar"}
               </Button>
             </div>
           )}

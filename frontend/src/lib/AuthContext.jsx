@@ -40,9 +40,14 @@ export function AuthProvider({ children }) {
   // mostrara "Creando cuenta…", porque la comprobación inicial ya había acabado.
   const [pending, setPending] = useState(false);
 
+  // Verdadero cuando la ultima consulta a /api/auth/me fallo por algo que no es
+  // un 401. Sirve para avisar en pantalla en vez de fingir normalidad.
+  const [degraded, setDegraded] = useState(false);
+
   const refresh = useCallback(async () => {
     try {
       const me = await api.auth.me();
+      setDegraded(false);
 
       if (me.authenticated) {
         setUser({
@@ -56,11 +61,36 @@ export function AuthProvider({ children }) {
         setUser(null);
         setStatus("unauthenticated");
       }
-    } catch {
-      // Backend caído: se trata como "sin sesión". Quedarse en "loading" para
-      // siempre congelaría la interfaz sin explicar por qué.
-      setUser(null);
-      setStatus("unauthenticated");
+    } catch (error) {
+      // Distinguir "no hay sesion" de "algo fallo" es lo que evita el deslogueo
+      // fantasma. Antes CUALQUIER fallo —un 429 del rate limit, un corte de red,
+      // un 500 pasajero— ponia al usuario como no autenticado y lo expulsaba de
+      // /library o /studio sin explicacion. Eso encaja con "la app se bugea
+      // despues de un rato".
+      //
+      // Solo un 401 significa de verdad que no hay sesion. Con el resto se
+      // conserva el usuario que ya se tenia: la cookie sigue siendo valida, y la
+      // proxima peticion probablemente funcione.
+      const esSesionInvalida = error instanceof ApiError && error.status === 401;
+
+      if (esSesionInvalida) {
+        setUser(null);
+        setStatus("unauthenticated");
+        return;
+      }
+
+      if (import.meta.env.DEV) {
+        console.warn(
+          `[AuthContext] /api/auth/me fallo (${error?.status ?? "sin respuesta"}: ${error?.code ?? error?.message}). ` +
+            "Se conserva la sesion; NO es un cierre de sesion.",
+        );
+      }
+
+      // Sin sesion previa y con el backend caido, no queda otra que tratarlo
+      // como no autenticado; pero se marca como "degraded" para que la interfaz
+      // pueda distinguirlo de un cierre de sesion normal.
+      setStatus((prev) => (prev === "authenticated" ? "authenticated" : "unauthenticated"));
+      setDegraded(true);
     }
   }, []);
 
@@ -170,6 +200,7 @@ export function AuthProvider({ children }) {
       // el envío en curso, no la comprobación inicial.
       loading: pending || status === "loading",
       pending,
+      degraded,
       register,
       login,
       logout,
@@ -178,7 +209,7 @@ export function AuthProvider({ children }) {
       resetPassword: notImplemented("Restablecer contraseña"),
       googleSignIn: notImplemented("El acceso con Google"),
     }),
-    [user, status, pending, register, login, logout, refresh, notImplemented],
+    [user, status, pending, degraded, register, login, logout, refresh, notImplemented],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

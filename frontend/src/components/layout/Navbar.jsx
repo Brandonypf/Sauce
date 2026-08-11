@@ -21,7 +21,7 @@ const LINKS = [
 ];
 
 export function Navbar() {
-  const { user, logout } = useAuth();
+  const { user, logout, isAuthenticated } = useAuth();
 
   return (
     <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur">
@@ -53,7 +53,7 @@ export function Navbar() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost">
-                  {user.name || user.email}
+                  {user.displayName || user.email}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
@@ -62,7 +62,9 @@ export function Navbar() {
                 <DropdownMenuItem asChild>
                   <Link to="/studio">Studio</Link>
                 </DropdownMenuItem>
-                {user.role === "admin" && (
+                {/* El backend no expone roles todavia; el enlace se muestra a cualquier
+                    sesion valida. Ver ProtectedRoute. */}
+                {isAuthenticated && (
                   <DropdownMenuItem asChild>
                     <Link to="/admin">Admin</Link>
                   </DropdownMenuItem>

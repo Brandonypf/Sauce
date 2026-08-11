@@ -4,6 +4,9 @@ import { pool } from "../db.js";
 import { notFound } from "../lib/errors.js";
 
 const listQuery = z.object({
+  // El frontend envia `format`; antes solo se interpretaba `category`, asi que
+  // el filtro se ignoraba en silencio y devolvia el catalogo entero.
+  format: z.enum(["game", "manga", "visual_novel", "artbook", "audio"]).optional(),
   category: z.string().optional(),
   q: z.string().optional(),
   limit: z.coerce.number().min(1).max(50).default(24),
@@ -29,16 +32,19 @@ const SELECT_WORK = `
 
 export async function catalogRoutes(app: FastifyInstance) {
   app.get("/api/works", async (request) => {
-    const { category, q, limit, offset } = listQuery.parse(request.query);
+    const { format, category, q, limit, offset } = listQuery.parse(request.query);
+
+    // `format` manda; `category` se acepta por compatibilidad.
+    const formato = format ?? category ?? null;
 
     const { rows } = await pool.query(
       `${SELECT_WORK}
         WHERE w.status = 'published'
-          AND ($1::text IS NULL OR w.category = $1)
+          AND ($1::text IS NULL OR w.format = $1::work_format)
           AND ($2::text IS NULL OR w.title ILIKE '%' || $2 || '%')
         ORDER BY w.published_at DESC
         LIMIT $3 OFFSET $4`,
-      [category ?? null, q ?? null, limit, offset],
+      [formato, q ?? null, limit, offset],
     );
 
     return { works: rows.map(toWork) };

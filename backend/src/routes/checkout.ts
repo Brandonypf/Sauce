@@ -34,6 +34,46 @@ export async function checkoutRoutes(app: FastifyInstance) {
     // El tipo de cambio se congela aqui, al abrir el checkout, y se guarda con la
     // orden. Recalcularlo al liquidar haria que lo que se le debe al creador
     // dejara de coincidir con lo que pago el comprador.
+    /**
+     * Obra gratuita: no genera orden.
+     *
+     * No es un atajo. Una orden representa un cobro, y `orders.amount_minor > 0`
+     * lo dice explicitamente en el esquema. Crear una orden de 0 chocaba con esa
+     * restriccion y el usuario recibia un 500 sin explicacion.
+     *
+     * Se resolvio asi y NO relajando el CHECK a `>= 0`, porque eso abriria la
+     * puerta a ordenes de importe cero por otros caminos —un precio mal
+     * calculado, un descuento erroneo— sin que nada las detecte. La restriccion
+     * es correcta; lo que estaba mal era pasar por ella.
+     *
+     * El entitlement se crea igual, con `source = 'grant'`, asi que biblioteca,
+     * control de acceso y lector funcionan sin ningun cambio.
+     */
+    if (Number(work.price_minor) === 0) {
+      const yaTenia = await tx(async (db) => {
+        const { rowCount } = await db.query(
+          `INSERT INTO entitlements (user_id, work_id, source)
+           VALUES ($1, $2, 'grant')
+           ON CONFLICT (user_id, work_id) WHERE revoked_at IS NULL DO NOTHING`,
+          [user.userId, work.id],
+        );
+
+        return rowCount === 0;
+      });
+
+      return {
+        free: true,
+        entitled: true,
+        alreadyOwned: yaTenia,
+        orderId: null,
+        redirectUrl: null,
+        amountMinor: 0,
+        currency: work.price_currency,
+        usdcAmount: 0,
+        fxRate: 0,
+      };
+    }
+
     const fxRate = env.FX_PEN_TO_USDC;
     const usdcAmount = Math.round(Number(work.price_minor) * fxRate * 10_000);
 

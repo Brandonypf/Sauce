@@ -11,6 +11,7 @@ import { PageNotFound } from "@/lib/PageNotFound";
 import { Landing } from "@/pages/Landing";
 import { Explore } from "@/pages/Explore";
 import { Reader } from "@/pages/Reader";
+import { WorkDetail } from "@/pages/WorkDetail";
 import { Library } from "@/pages/Library";
 import { CreatorProfile } from "@/pages/CreatorProfile";
 import { CreatorStudio } from "@/pages/CreatorStudio";
@@ -45,6 +46,7 @@ export default function App() {
                     </ProtectedRoute>
                   }
                 />
+                <Route path="work/:slug" element={<WorkDetail />} />
                 <Route path="creator/:handle" element={<CreatorProfile />} />
                 <Route
                   path="studio"

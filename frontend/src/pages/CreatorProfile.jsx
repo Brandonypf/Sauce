@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { BadgeCheck, Loader2 } from "lucide-react";
 import { Badge } from "@/components/content/Badge";
 import { ContentCard } from "@/components/content/ContentCard";
+import { CheckoutModal } from "@/components/checkout/CheckoutModal";
 import { api } from "@/api/client";
 
 /**
@@ -15,7 +17,11 @@ import { api } from "@/api/client";
 export function CreatorProfile() {
   const { handle } = useParams();
 
-  const { data, isLoading, error } = useQuery({
+  // Sin este estado la tarjeta recibia `onBuy` undefined y `onBuy?.(item)` se
+  // tragaba el clic sin error: el boton Comprar parecia roto.
+  const [checkoutItem, setCheckoutItem] = useState(null);
+
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["creator", handle],
     queryFn: () => api.creators.get(handle),
     retry: false,
@@ -88,11 +94,24 @@ export function CreatorProfile() {
         ) : (
           <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
             {works.map((work) => (
-              <ContentCard key={work.slug} item={work} />
+              <ContentCard
+                key={work.slug}
+                item={work}
+                onBuy={() => setCheckoutItem(work)}
+              />
             ))}
           </div>
         )}
       </section>
+
+      {checkoutItem && (
+        <CheckoutModal
+          open
+          item={checkoutItem}
+          onOpenChange={(next) => !next && setCheckoutItem(null)}
+          onComplete={() => refetch()}
+        />
+      )}
     </div>
   );
 }

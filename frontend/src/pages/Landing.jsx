@@ -1,8 +1,10 @@
 import { Link } from "react-router-dom";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/button";
 import { ContentCard } from "@/components/content/ContentCard";
+import { CheckoutModal } from "@/components/checkout/CheckoutModal";
 import { api } from "@/api/client";
 
 /**
@@ -15,7 +17,11 @@ import { api } from "@/api/client";
  * de una obra destacada — arte propio, subido por su creador.
  */
 export function Landing() {
-  const { data, isLoading } = useQuery({
+  // Mismo estado que Explore: Home no tenia ninguno, asi que `onBuy` llegaba
+  // undefined a la tarjeta y `onBuy?.(item)` se tragaba el clic sin error.
+  const [checkoutItem, setCheckoutItem] = useState(null);
+
+  const { data, isLoading, refetch } = useQuery({
     queryKey: ["works", "landing"],
     queryFn: () => api.works.list({ limit: 8 }),
   });
@@ -51,11 +57,25 @@ export function Landing() {
         ) : (
           <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
             {works.map((work, i) => (
-              <ContentCard key={work.slug} item={work} top={i === 0} />
+              <ContentCard
+                key={work.slug}
+                item={work}
+                top={i === 0}
+                onBuy={() => setCheckoutItem(work)}
+              />
             ))}
           </div>
         )}
       </section>
+
+      {checkoutItem && (
+        <CheckoutModal
+          open
+          item={checkoutItem}
+          onOpenChange={(next) => !next && setCheckoutItem(null)}
+          onComplete={() => refetch()}
+        />
+      )}
     </div>
   );
 }
@@ -87,7 +107,13 @@ function Hero() {
             <Link to="/explore">Explorar obras</Link>
           </Button>
           <Button asChild size="lg" variant="outline">
-            <Link to="/creators">Conoce a los creadores</Link>
+            {/*
+              Antes apuntaba a /creators, que no existe: llevaba a PageNotFound.
+              No se inventa una seccion de creadores —a los perfiles ya se llega
+              desde cada obra— y se evita duplicar el CTA de al lado mandando
+              este al estudio, que es el otro lado del mercado y una ruta real.
+            */}
+            <Link to="/studio">Publica tu obra</Link>
           </Button>
         </div>
       </div>
