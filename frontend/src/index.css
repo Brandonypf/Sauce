@@ -1,0 +1,140 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------------------------------------------------------------------------
+   SAUCE · paleta Sakura + Coral
+
+   Los tokens van en HSL sin envolver porque shadcn los consume como
+   `hsl(var(--background))`. Poner hex aquí rompe todos sus componentes de golpe
+   y de forma silenciosa: el color no se aplica y no hay error en consola.
+
+   El hex original de cada uno queda anotado al lado para poder revisarlo.
+--------------------------------------------------------------------------- */
+
+@layer base {
+  :root {
+    /* Fondos */
+    --background: 7 100% 98%;         /* #FFF8F7 pétalo al amanecer */
+    --foreground: 0 0% 10%;           /* #1A1A1A negro suave */
+    --card: 0 0% 100%;                /* #FFFFFF */
+    --card-foreground: 0 0% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 10%;
+
+    /* Coral SAUCE como acción principal. En shadcn `primary` es el botón
+       sólido, así que el coral va aquí y no en `accent`. */
+    --primary: 7 67% 55%;             /* #D94F3D */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 352 100% 97%;        /* #FFF0F2 */
+    --secondary-foreground: 7 67% 55%;
+
+    --muted: 352 100% 97%;
+    --muted-foreground: 349 8% 39%;   /* #6B5B5E gris cálido con matiz rosa */
+
+    --accent: 348 100% 97%;           /* #FFF0F3 sakura-glow */
+    --accent-foreground: 7 67% 55%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 349 35% 91%;            /* #F0E0E3 borde con matiz rosa */
+    --input: 349 35% 91%;
+    --ring: 7 67% 55%;
+
+    --radius: 0.75rem;
+
+    /* Tokens propios de SAUCE, en hex porque no pasan por shadcn */
+    --bg-elevated: #fff0f2;
+    --text-tertiary: #a89094;
+    --sakura-pink: #ffb7c5;
+    --sakura-deep: #e89cae;
+    --sakura-glow: #fff0f3;
+    --accent-hover: #c04433;
+    --accent-soft: rgba(217, 79, 61, 0.08);
+    --success: #2d8a4e;
+    --success-soft: rgba(45, 138, 78, 0.08);
+    --border-hover: #e5d0d5;
+
+    --hero-gradient: linear-gradient(
+      135deg,
+      #fff8f7 0%,
+      #fff0f2 50%,
+      #ffe8ec 100%
+    );
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* El texto sobre el hero se lee sobre imagen; sin esto pierde contraste
+     justo en las zonas claras de la ilustración. */
+  .hero-gradient {
+    background-image: var(--hero-gradient);
+  }
+}
+
+@layer components {
+  /* Tarjeta de obra: la portada 3:4 es el elemento visual de toda la tienda.
+     La elevación es mínima en reposo y crece al pasar por encima, para que la
+     rejilla se lea como una estantería y no como una lista de fichas. */
+  .work-card {
+    @apply overflow-hidden rounded-xl border bg-card transition-all duration-300;
+    box-shadow: 0 1px 2px rgba(217, 79, 61, 0.04);
+  }
+
+  .work-card:hover {
+    border-color: var(--border-hover);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 28px -8px rgba(217, 79, 61, 0.18);
+  }
+
+  .badge-licensed {
+    background-color: var(--success-soft);
+    color: var(--success);
+  }
+
+  .badge-sakura {
+    background-color: var(--sakura-glow);
+    color: #d94f3d;
+  }
+
+  .badge-top {
+    background-color: #d94f3d;
+    color: #fff;
+  }
+}
+
+/* Pétalos del hero. `prefers-reduced-motion` los detiene: una animación
+   perpetua de fondo es justo lo que marea a quien activa esa preferencia. */
+@keyframes petal-fall {
+  0% {
+    transform: translateY(-10%) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: translateY(120vh) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+.petal {
+  animation: petal-fall linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .petal {
+    animation: none;
+    display: none;
+  }
+}
